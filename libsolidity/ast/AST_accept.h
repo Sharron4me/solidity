@@ -188,7 +188,15 @@ void UsingForDirective::accept(ASTVisitor& _visitor)
 {
 	if (_visitor.visit(*this))
 	{
-		m_libraryName->accept(_visitor);
+		visit(util::GenericVisitor{
+			[&](LibraryOrFunctionOrModule const& _libraryOrFunctionOrModule) {
+				_libraryOrFunctionOrModule.name->accept(_visitor);
+			},
+			[&](FunctionList const& _functionList) {
+				listAccept(_functionList.functions, _visitor);
+			},
+			[&](Asterisk const&) {},
+		}, m_lhs);
 		if (m_typeName)
 			m_typeName->accept(_visitor);
 	}
@@ -199,7 +207,15 @@ void UsingForDirective::accept(ASTConstVisitor& _visitor) const
 {
 	if (_visitor.visit(*this))
 	{
-		m_libraryName->accept(_visitor);
+		visit(util::GenericVisitor{
+			[&](LibraryOrFunctionOrModule const& _libraryOrFunctionOrModule) {
+				_libraryOrFunctionOrModule.name->accept(_visitor);
+			},
+			[&](FunctionList const& _functionList) {
+				listAccept(_functionList.functions, _visitor);
+			},
+			[&](Asterisk const&) {},
+		}, m_lhs);
 		if (m_typeName)
 			m_typeName->accept(_visitor);
 	}

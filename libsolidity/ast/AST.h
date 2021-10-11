@@ -33,6 +33,7 @@
 #include <libevmasm/Instruction.h>
 #include <libsolutil/FixedHash.h>
 #include <libsolutil/LazyInit.h>
+#include <libsolutil/Visitor.h>
 
 #include <json/json.h>
 
@@ -43,6 +44,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace solidity::yul
@@ -629,6 +631,7 @@ private:
 };
 
 /**
+ * TODO
  * `using LibraryName for uint` will attach all functions from the library LibraryName
  * to `uint` if the first parameter matches the type. `using LibraryName for *` attaches
  * the function to any matching type.
@@ -636,26 +639,49 @@ private:
 class UsingForDirective: public ASTNode
 {
 public:
+	struct LibraryOrFunctionOrModule
+	{
+		ASTPointer<IdentifierPath> name;
+	};
+	struct FunctionList
+	{
+		std::vector<ASTPointer<IdentifierPath>> functions;
+	};
+	struct Asterisk {};
+
+	using LHS = std::variant<LibraryOrFunctionOrModule, FunctionList, Asterisk>;
+
 	UsingForDirective(
 		int64_t _id,
 		SourceLocation const& _location,
-		ASTPointer<IdentifierPath> _libraryName,
+		LHS _lhs,
 		ASTPointer<TypeName> _typeName
 	):
-		ASTNode(_id, _location), m_libraryName(std::move(_libraryName)), m_typeName(std::move(_typeName))
+		ASTNode(_id, _location), m_lhs(_lhs), m_typeName(std::move(_typeName))
 	{
-		solAssert(m_libraryName != nullptr, "Name cannot be null.");
+		std::visit(util::GenericVisitor{
+			[&](LibraryOrFunctionOrModule const& _l) {
+				solAssert(_l.name, "Name cannot be null");
+			},
+			[&](FunctionList const& _f) {
+				for (auto ptr: _f.functions)
+					solAssert(ptr, "Name cannot be null");
+			},
+			[&](Asterisk const&) {},
+		}, m_lhs);
 	}
 
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
 
-	IdentifierPath const& libraryName() const { return *m_libraryName; }
 	/// @returns the type name the library is attached to, null for `*`.
 	TypeName const* typeName() const { return m_typeName.get(); }
 
+	LHS const& lhs() const { return m_lhs; }
+
 private:
-	ASTPointer<IdentifierPath> m_libraryName;
+	LHS m_lhs;
+	// TODO should this be a variant of typename and Asterisk?
 	ASTPointer<TypeName> m_typeName;
 };
 
