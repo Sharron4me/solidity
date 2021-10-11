@@ -348,9 +348,23 @@ ASTPointer<InheritanceSpecifier> ASTJsonImporter::createInheritanceSpecifier(Jso
 
 ASTPointer<UsingForDirective> ASTJsonImporter::createUsingForDirective(Json::Value const& _node)
 {
+	// TODO do we need backwards compatibility for AST JSON?
+	UsingForDirective::LHS lhs;
+	if (_node.isMember("libraryOrFunctionOrModuleName"))
+		lhs = UsingForDirective::LibraryOrFunctionOrModule{createIdentifierPath(_node["libraryName"])};
+	else if (_node.isMember("functionList"))
+	{
+		vector<ASTPointer<IdentifierPath>> functions;
+		Json::Value array = _node["functionList"];
+		for (Json::ArrayIndex i = 0; i < array.size(); ++i)
+			functions.emplace_back(createIdentifierPath(array[i]));
+		lhs = UsingForDirective::FunctionList{functions};
+	}
+	else if (_node.isMember("asterisk"))
+		lhs = UsingForDirective::Asterisk{};
 	return createASTNode<UsingForDirective>(
 		_node,
-		createIdentifierPath(member(_node, "libraryName")),
+		lhs,
 		_node["typeName"].isNull() ? nullptr  : convertJsonToASTNode<TypeName>(_node["typeName"])
 	);
 }

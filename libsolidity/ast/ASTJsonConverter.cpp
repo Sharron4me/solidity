@@ -32,6 +32,7 @@
 #include <libsolutil/JSON.h>
 #include <libsolutil/UTF8.h>
 #include <libsolutil/CommonData.h>
+#include <libsolutil/Visitor.h>
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -310,10 +311,39 @@ bool ASTJsonConverter::visit(InheritanceSpecifier const& _node)
 
 bool ASTJsonConverter::visit(UsingForDirective const& _node)
 {
+	using ReturnType = pair<string, Json::Value>;
+	ReturnType lhs = std::visit(GenericVisitor{
+		[&](UsingForDirective::LibraryOrFunctionOrModule const& _libraryOrFunctionOrModule) -> ReturnType
+		{
+			solAssert(_libraryOrFunctionOrModule.name, "");
+			return
+				make_pair(
+					"libraryOrFunctionOrModuleName",
+					toJson(*_libraryOrFunctionOrModule.name)
+				);
+		},
+		[&](UsingForDirective::FunctionList const& _functionList) -> ReturnType
+		{
+			Json::Value functions{Json::arrayValue};
+			for (auto path: _functionList.functions)
+			{
+				solAssert(path && path->annotation().referencedDeclaration, "");
+				functions.append(path->annotation().referencedDeclaration->name());
+			}
+
+			return make_pair("functionList", functions);
+		},
+		[&](UsingForDirective::Asterisk const&) -> ReturnType
+		{
+			return make_pair("asterisk", Json::nullValue);
+		}
+	}, _node.lhs());
+
 	setJsonNode(_node, "UsingForDirective", {
-		make_pair("libraryName", toJson(_node.libraryName())),
+		lhs,
 		make_pair("typeName", _node.typeName() ? toJson(*_node.typeName()) : Json::nullValue)
 	});
+
 	return false;
 }
 
