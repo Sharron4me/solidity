@@ -3433,22 +3433,24 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 {
 	auto checkFunctionDefinition = [&](FunctionDefinition const& _functionDefinition, SourceLocation _location)
 	{
-		Type const* usingForType = _usingFor.typeName()->annotation().type;
-		solAssert(usingForType, "");
-
+		TypeName const* typeName = _usingFor.typeName();
+		bool isAsterisk = !typeName;
+		solAssert(isAsterisk || typeName->annotation().type, "");
+		string usingForTypeName = isAsterisk ? "*" : typeName->annotation().type->toString();
 		solAssert(_functionDefinition.type(), "");
+
 		if (_functionDefinition.parameters().empty())
 			m_errorReporter.fatalTypeError(
 				4731_error,
 				_location,
 				"The function \"" + _functionDefinition.name() + "\" " +
 				"does not have any parameters, and therefore cannot be bound to the type \"" +
-				usingForType->toString() + "\"."
+				usingForTypeName + "\"."
 			);
 
 		auto const& functionType = dynamic_cast<FunctionType const&>(*_functionDefinition.type()).asBoundFunction();
 		solAssert(functionType && functionType->selfType(), "");
-		if (!_usingFor.typeName()->annotation().type->isImplicitlyConvertibleTo(*functionType->selfType()))
+		if (!isAsterisk && !_usingFor.typeName()->annotation().type->isImplicitlyConvertibleTo(*functionType->selfType()))
 			m_errorReporter.typeError(
 				3100_error,
 				_location,
