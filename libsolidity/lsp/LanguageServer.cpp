@@ -95,6 +95,46 @@ vector<Declaration const*> allAnnotatedDeclarations(Identifier const* _identifie
 	return output;
 }
 
+template <typename A>
+void jsonArrayAppend(Json::Value& _array, A a)
+{
+	_array.append(a);
+}
+
+template <typename A, typename... B>
+void jsonArrayAppend(Json::Value& _array, A a, B... b)
+{
+	jsonArrayAppend(_array, a);
+	jsonArrayAppend(_array, b...);
+}
+
+template <typename... Args>
+Json::Value jsonArray(Args... _args)
+{
+	Json::Value array = Json::arrayValue;
+	if constexpr (sizeof...(_args) != 0)
+		jsonArrayAppend(array, std::forward<Args>(_args)...);
+	return array;
+}
+
+Json::Value jsonTokenTypes()
+{
+	return jsonArray(
+		"type", "class", "enum", "interface", "struct", "typeParameter",
+		"parameter", "variable", "property", "enumMember", "event", "function", "method",
+		"keyword", "modifier", "comment", "string", "number", "operator"
+	);
+}
+
+Json::Value jsonTokenModifiers()
+{
+	return jsonArray(
+		"declaration", "definition", "readonly", "static",
+		"deprecated", "abstract", /*"async",*/ "modification", "documentation",
+		"defaultLibrary"
+	);
+}
+
 }
 
 LanguageServer::LanguageServer(Logger _logger, unique_ptr<Transport> _transport):
@@ -113,6 +153,7 @@ LanguageServer::LanguageServer(Logger _logger, unique_ptr<Transport> _transport)
 		{"textDocument/hover", bind(&LanguageServer::handleTextDocumentHover, this, _1, _2)},
 		{"textDocument/implementation", [this](auto _id, auto _args) { handleGotoDefinition(_id, _args); }},
 		{"textDocument/references", bind(&LanguageServer::handleTextDocumentReferences, this, _1, _2)},
+		{"textDocument/semanticTokens/full", bind(&LanguageServer::semanticTokensFull, this, _1, _2)},
 		{"workspace/didChangeConfiguration", bind(&LanguageServer::handleWorkspaceDidChangeConfiguration, this, _1, _2)},
 	},
 	m_logger{move(_logger)}
@@ -434,6 +475,11 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 	replyArgs["capabilities"]["implementationProvider"] = true;
 	replyArgs["capabilities"]["documentHighlightProvider"] = true;
 	replyArgs["capabilities"]["referencesProvider"] = true;
+	replyArgs["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"] = jsonTokenTypes();
+	replyArgs["capabilities"]["semanticTokensProvider"]["legend"]["tokenModifiers"] = jsonTokenModifiers();
+	replyArgs["capabilities"]["semanticTokensProvider"]["range"] = true;
+	replyArgs["capabilities"]["semanticTokensProvider"]["full"] = true; // XOR requests.full.delta = true
+
 	m_client->reply(_id, replyArgs);
 }
 
@@ -654,6 +700,27 @@ void LanguageServer::handleTextDocumentReferences(MessageID _id, Json::Value con
 		jsonReply.append(toJson(location));
 	log("Sending reply");
 	m_client->reply(_id, jsonReply);
+}
+
+void LanguageServer::semanticTokensFull(MessageID _id, Json::Value const& _args)
+{
+	// TODO(pr) :-)
+	(void) _id;
+	auto uri = _args["textDocument"]["uri"];
+	(void) uri;
+
+	/*
+	https://microsoft.github.io/language-server-protocol/specifications/specification-3-17/#textDocument_semanticTokens
+
+	{ deltaLine: 2, deltaStartChar: 5, length: 3, tokenType: 0, tokenModifiers: 3 },
+	{ deltaLine: 0, deltaStartChar: 5, length: 4, tokenType: 1, tokenModifiers: 0 },
+	{ deltaLine: 3, deltaStartChar: 2, length: 7, tokenType: 2, tokenModifiers: 0 }
+
+	// 1st token,  2nd token,  3rd token
+	[  2,5,3,0,3,  0,5,4,1,0,  3,2,7,2,0 ]
+
+	So traverse through the AST and assign each leaf a token 5-tuple.
+	*/
 }
 
 void LanguageServer::log(string _message)
