@@ -529,7 +529,7 @@ string IRGenerator::generateFunctionWithModifierInner(FunctionDefinition const& 
 		for (size_t i = 0; i < retParams.size(); ++i)
 		{
 			retParamsIn.emplace_back(m_context.newYulVariable());
-			assignRetParams += retParams.back() + " := " + retParamsIn[i] + "\n";
+			assignRetParams += retParams[i] + " := " + retParamsIn[i] + "\n";
 		}
 		vector<string> params = retParamsIn;
 		for (auto const& varDecl: _function.parameters())
